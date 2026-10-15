@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 import numpy as np
 from app.detection.features.feature_schema import FEATURE_SCHEMA, PROTOCOL_MAP
-from app.detection.features.flow_features import FlowFeatures, _safe_mean, _safe_std, _iat_stats
+from app.detection.features.flow_features import FlowFeatures, _safe_mean, _safe_std, _safe_sum, _iat_stats, _iat_max, _iat_min
 
 
 def extract_feature_vector(flow: FlowFeatures, flow_key: str) -> list[float]:
@@ -56,12 +56,12 @@ def extract_feature_vector(flow: FlowFeatures, flow_key: str) -> list[float]:
         _safe_mean(all_lengths),
         _safe_std(all_lengths),
         (flow_bytes / flow_packets) if flow_packets > 0 else 0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
-        0.0,
+        _safe_sum(state.fwd_header_lengths),
+        _safe_sum(state.bwd_header_lengths),
+        min(state.fwd_header_lengths + state.bwd_header_lengths) if (state.fwd_header_lengths or state.bwd_header_lengths) else 0.0,
+        max(state.fwd_header_lengths + state.bwd_header_lengths) if (state.fwd_header_lengths or state.bwd_header_lengths) else 0.0,
+        _safe_mean(state.fwd_header_lengths + state.bwd_header_lengths),
+        _safe_std(state.fwd_header_lengths + state.bwd_header_lengths),
         fwd_iat_total,
         fwd_iat_mean,
         fwd_iat_std,
@@ -70,8 +70,8 @@ def extract_feature_vector(flow: FlowFeatures, flow_key: str) -> list[float]:
         bwd_iat_std,
         flow_iat_mean,
         flow_iat_std,
-        max([0.0]),
-        min([0.0]),
+        _iat_max(state.flow_timestamps),
+        _iat_min(state.flow_timestamps),
         state.syn_count,
         state.ack_count,
         state.fin_count,

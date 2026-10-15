@@ -39,11 +39,10 @@ class FlowFeatures:
 
     @staticmethod
     def _make_key(meta) -> str:
-        return (
-            f"{meta.source_ip}:{meta.source_port or 0}-"
-            f"{meta.destination_ip}:{meta.destination_port or 0}-"
-            f"{meta.protocol}"
-        )
+        fwd = (meta.source_ip, meta.source_port or 0, meta.destination_ip, meta.destination_port or 0)
+        bwd = (meta.destination_ip, meta.destination_port or 0, meta.source_ip, meta.source_port or 0)
+        canonical = min(fwd, bwd)
+        return f"{canonical[0]}:{canonical[1]}-{canonical[2]}:{canonical[3]}-{meta.protocol}"
 
     def add_packet(self, meta) -> str:
         key = self._make_key(meta)
@@ -62,20 +61,21 @@ class FlowFeatures:
         ts = meta.timestamp.timestamp()
         flow.flow_timestamps.append(ts)
 
-        is_forward = True
-        if flow.source_ip != meta.source_ip:
-            is_forward = False
+        is_forward = (
+            meta.source_ip == flow.source_ip
+            and (meta.source_port or 0) == (flow.source_port or 0)
+        )
 
         if is_forward:
             flow.fwd_packets += 1
             flow.fwd_lengths.append(meta.length)
             flow.fwd_timestamps.append(ts)
-            if meta.ttl is not None:
-                flow.fwd_header_lengths.append(meta.length - meta.length)
+            flow.fwd_header_lengths.append(meta.header_length)
         else:
             flow.bwd_packets += 1
             flow.bwd_lengths.append(meta.length)
             flow.bwd_timestamps.append(ts)
+            flow.bwd_header_lengths.append(meta.header_length)
 
         flow.packet_lengths.append(meta.length)
 
@@ -126,9 +126,27 @@ def _safe_std(values: Sequence[float | int]) -> float:
     return math.sqrt(variance)
 
 
+def _safe_sum(values: Sequence[float | int]) -> float:
+    return float(sum(values)) if values else 0.0
+
+
 def _iat_stats(timestamps: list[float]) -> tuple[float, float, float]:
     if len(timestamps) < 2:
         return 0.0, 0.0, 0.0
     iats = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
     total = sum(iats)
     return total, _safe_mean(iats), _safe_std(iats)
+
+
+def _iat_max(timestamps: list[float]) -> float:
+    if len(timestamps) < 2:
+        return 0.0
+    iats = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+    return max(iats)
+
+
+def _iat_min(timestamps: list[float]) -> float:
+    if len(timestamps) < 2:
+        return 0.0
+    iats = [timestamps[i + 1] - timestamps[i] for i in range(len(timestamps) - 1)]
+    return min(iats)
