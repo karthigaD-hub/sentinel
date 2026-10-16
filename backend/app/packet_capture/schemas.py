@@ -16,6 +16,7 @@ class PacketMetadata(BaseModel):
     source_port: int | None = None
     destination_port: int | None = None
     length: int
+    header_length: int = 0
     flags: str | None = None
     ttl: int | None = None
     dns_query: str | None = None

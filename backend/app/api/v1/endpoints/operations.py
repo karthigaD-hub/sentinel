@@ -100,7 +100,7 @@ async def detection_status(_: User = Depends(get_current_user)) -> dict:
 
 
 @detection_router.post("/start")
-async def detection_start(interface: str, _: User = Depends(require_permission(PermissionName.CAPTURE_START))) -> dict:
+async def detection_start(interface: str, user: User = Depends(require_permission(PermissionName.CAPTURE_START))) -> dict:
     if not detection_engine.available:
         raise HTTPException(status_code=503, detail="Detection models are not trained. Train the Autoencoder and XGBoost models first.")
     if not capture_service.running:
@@ -108,7 +108,7 @@ async def detection_start(interface: str, _: User = Depends(require_permission(P
             capture_service.start_capture(interface)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
-    detection_pipeline.start(AsyncSessionLocal)
+    detection_pipeline.start(AsyncSessionLocal, str(user.id))
     return {"status": "detection_started", "interface": interface}
 
 

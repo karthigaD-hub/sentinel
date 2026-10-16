@@ -21,6 +21,7 @@ def parse_packet(packet, interface: str) -> PacketMetadata | None:
     destination_port: int | None = None
     flags: str | None = None
     ttl: int | None = ip_layer.ttl
+    header_length = int(ip_layer.ihl) * 4
     dns_query: str | None = None
     http_method: str | None = None
     http_host: str | None = None
@@ -33,13 +34,16 @@ def parse_packet(packet, interface: str) -> PacketMetadata | None:
         source_port = int(tcp.sport)
         destination_port = int(tcp.dport)
         flags = str(tcp.flags)
+        header_length += int(tcp.dataofs) * 4
     elif UDP in packet:
         protocol = "UDP"
         udp = packet[UDP]
         source_port = int(udp.sport)
         destination_port = int(udp.dport)
+        header_length += 8
     elif ICMP in packet:
         protocol = "ICMP"
+        header_length += 8
 
     if DNS in packet:
         try:
@@ -76,6 +80,7 @@ def parse_packet(packet, interface: str) -> PacketMetadata | None:
         source_port=source_port,
         destination_port=destination_port,
         length=len(packet),
+        header_length=header_length,
         flags=flags,
         ttl=ttl,
         dns_query=dns_query,

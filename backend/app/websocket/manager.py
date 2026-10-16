@@ -15,7 +15,18 @@ class ConnectionManager:
             del self.connections[user_id]
 
     async def send_to_user(self, user_id: str, event: dict) -> None:
+        if user_id == "broadcast":
+            await self.broadcast(event)
+            return
         for connection in list(self.connections.get(user_id, ())):
             await connection.send_json(event)
+
+    async def broadcast(self, event: dict) -> None:
+        for user_id in list(self.connections.keys()):
+            for connection in list(self.connections[user_id]):
+                try:
+                    await connection.send_json(event)
+                except Exception:
+                    pass
 
 manager = ConnectionManager()
