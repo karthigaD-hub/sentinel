@@ -6,17 +6,44 @@ from app.core.security_config import create_access_token, create_refresh_token, 
 from app.models import RefreshToken, Role, User
 from app.schemas import LoginRequest, TokenResponse, UserCreate
 
+ROLE_PERMISSIONS: dict[str, list[str]] = {
+    "admin": [
+        "dashboard:view", "capture:view", "capture:start", "capture:stop",
+        "detection:view", "alerts:view", "alerts:update", "threatintel:view",
+        "assistant:use", "reports:view", "quantum:view", "settings:view", "settings:update", "admin:manage",
+    ],
+    "analyst": [
+        "dashboard:view", "capture:view", "capture:start", "capture:stop",
+        "detection:view", "alerts:view", "alerts:update", "threatintel:view",
+        "assistant:use", "reports:view", "quantum:view", "settings:view",
+    ],
+    "viewer": [
+        "dashboard:view", "alerts:view", "detection:view", "threatintel:view",
+        "reports:view", "quantum:view", "settings:view",
+    ],
+}
+
 class AuthService:
     @staticmethod
+    async def _get_or_create_role(role_name: str, session: AsyncSession) -> Role:
+        role = await session.scalar(select(Role).where(Role.name == role_name))
+        if role:
+            return role
+        role = Role(name=role_name, permissions=ROLE_PERMISSIONS.get(role_name, []))
+        session.add(role)
+        await session.flush()
+        return role
+
+    @staticmethod
     async def register(data: UserCreate, session: AsyncSession) -> User:
+        requested_role = data.role.lower().strip()
+        if requested_role not in ROLE_PERMISSIONS:
+            requested_role = "viewer"
+
         existing = await session.scalar(select(User).where(User.email == data.email.lower()))
         if existing:
             raise ValueError("An account with this email already exists")
-        role = await session.scalar(select(Role).where(Role.name == "viewer"))
-        if not role:
-            role = Role(name="viewer", permissions=["dashboard:view", "alerts:view", "detection:view", "threatintel:view", "reports:view", "quantum:view"])
-            session.add(role)
-            await session.flush()
+        role = await AuthService._get_or_create_role(requested_role, session)
         user = User(email=data.email.lower(), password_hash=hash_password(data.password), full_name=data.full_name, role_id=role.id)
         session.add(user)
         await session.commit()

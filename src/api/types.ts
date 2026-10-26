@@ -24,6 +24,7 @@ export interface UserCreate {
   email: string;
   password: string;
   full_name?: string;
+  role?: UserRole;
 }
 
 export interface PaginatedResponse<T = unknown> {

@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Activity, BellRing, Radio, BrainCircuit,
   Zap, AlertTriangle, CheckCircle2, XCircle, Loader2,
+  Users, Server, Settings as SettingsIcon, ShieldAlert,
+  TrendingUp, Database, Cpu, Lock, Eye,
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -10,9 +12,11 @@ import {
 import { dashboardApi } from '../api/dashboardApi';
 import { captureApi } from '../api/captureApi';
 import { alertApi } from '../api/alertApi';
+import { useAuthStore } from '../store/authStore';
 import { useWsStore } from '../store/wsStore';
 import { LoadingState, ErrorState, BackendOfflineState, EmptyState } from '../components/StateComponents';
 import { cn } from '../utils/cn';
+import type { UserRole } from '../api/types';
 
 const PIE_COLORS = ['#22d3ee', '#3399ff', '#f59e0b', '#ef4444', '#22c55e'];
 
@@ -54,39 +58,53 @@ function WsIndicator() {
   );
 }
 
-export function DashboardPage() {
-  const healthQuery = useQuery({ queryKey: ['health'], queryFn: dashboardApi.health, refetchInterval: 30000 });
-  const captureStatusQuery = useQuery({ queryKey: ['capture', 'status'], queryFn: captureApi.status, refetchInterval: 5000 });
-  const captureStatsQuery = useQuery({ queryKey: ['capture', 'statistics'], queryFn: captureApi.statistics, refetchInterval: 5000 });
-  const detectionStatusQuery = useQuery({ queryKey: ['detection', 'status'], queryFn: dashboardApi.detectionStatus, refetchInterval: 5000 });
-  const detectionStatsQuery = useQuery({ queryKey: ['detection', 'statistics'], queryFn: dashboardApi.detectionStatistics, refetchInterval: 10000 });
-  const modelStatusQuery = useQuery({ queryKey: ['detection', 'model'], queryFn: dashboardApi.modelStatus, refetchInterval: 30000 });
-  const alertsQuery = useQuery({ queryKey: ['alerts', 'dashboard'], queryFn: () => alertApi.list(1, 100), refetchInterval: 10000 });
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Administrator',
+  analyst: 'Security Analyst',
+  viewer: 'Viewer',
+};
 
-  if (healthQuery.isError) {
-    return <BackendOfflineState />;
-  }
-  if (healthQuery.isLoading) {
-    return <LoadingState title="Initializing dashboard..." />;
-  }
+const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
+  admin: 'Full system oversight with user management and configuration controls',
+  analyst: 'Active threat monitoring, detection management, and alert triage',
+  viewer: 'Read-only security overview and alert visibility',
+};
 
+import type { CaptureStatus, CaptureStatistics, DetectionStatus, DetectionStatistics, ModelStatus, AlertRead, PaginatedResponse } from '../api/types';
+
+type QueryResult<T> = {
+  data: T | undefined;
+  isLoading: boolean;
+  isError: boolean;
+};
+
+function SharedStats({
+  captureStatusQuery, captureStatsQuery, detectionStatusQuery, detectionStatsQuery,
+  modelStatusQuery, alertsQuery,
+}: {
+  captureStatusQuery: QueryResult<CaptureStatus>;
+  captureStatsQuery: QueryResult<CaptureStatistics>;
+  detectionStatusQuery: QueryResult<DetectionStatus>;
+  detectionStatsQuery: QueryResult<DetectionStatistics>;
+  modelStatusQuery: QueryResult<ModelStatus>;
+  alertsQuery: QueryResult<PaginatedResponse<AlertRead>>;
+}) {
   const captureStatus = captureStatusQuery.data;
-  const captureStats = captureStatsQuery.data;
   const detectionStatus = detectionStatusQuery.data;
   const detectionStats = detectionStatsQuery.data;
   const modelStatus = modelStatusQuery.data;
   const alerts = alertsQuery.data?.items || [];
 
-  const criticalAlerts = alerts.filter((a) => a.severity.toLowerCase() === 'critical');
-  const openAlerts = alerts.filter((a) => a.status === 'open');
-  const acknowledgedAlerts = alerts.filter((a) => a.status === 'acknowledged');
-  const resolvedAlerts = alerts.filter((a) => a.status === 'resolved');
+  const criticalAlerts = alerts.filter((a: AlertRead) => a.severity.toLowerCase() === 'critical');
+  const openAlerts = alerts.filter((a: AlertRead) => a.status === 'open');
+  const acknowledgedAlerts = alerts.filter((a: AlertRead) => a.status === 'acknowledged');
+  const resolvedAlerts = alerts.filter((a: AlertRead) => a.status === 'resolved');
 
   const severityData = [
-    { name: 'Critical', value: alerts.filter((a) => a.severity.toLowerCase() === 'critical').length },
-    { name: 'High', value: alerts.filter((a) => a.severity.toLowerCase() === 'high').length },
-    { name: 'Medium', value: alerts.filter((a) => a.severity.toLowerCase() === 'medium').length },
-    { name: 'Low', value: alerts.filter((a) => a.severity.toLowerCase() === 'low').length },
+    { name: 'Critical', value: alerts.filter((a: AlertRead) => a.severity.toLowerCase() === 'critical').length },
+    { name: 'High', value: alerts.filter((a: AlertRead) => a.severity.toLowerCase() === 'high').length },
+    { name: 'Medium', value: alerts.filter((a: AlertRead) => a.severity.toLowerCase() === 'medium').length },
+    { name: 'Low', value: alerts.filter((a: AlertRead) => a.severity.toLowerCase() === 'low').length },
   ].filter((d) => d.value > 0);
 
   const statusData = [
@@ -98,44 +116,12 @@ export function DashboardPage() {
   const hasAlertData = severityData.length > 0 || statusData.length > 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-2xl font-bold text-navy-50">Security Operations Dashboard</h1>
-          <p className="text-sm text-navy-400">Real-time threat detection and network monitoring</p>
-        </div>
-        <WsIndicator />
-      </div>
-
+    <>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          icon={Radio}
-          label="Packets Captured"
-          value={captureStatus?.packets_captured ?? 0}
-          color="text-cyber-400"
-          loading={captureStatusQuery.isLoading}
-        />
-        <StatCard
-          icon={Zap}
-          label="Detections"
-          value={detectionStats?.total_detections ?? 0}
-          color="text-cyan-400"
-          loading={detectionStatsQuery.isLoading}
-        />
-        <StatCard
-          icon={BellRing}
-          label="Total Alerts"
-          value={alertsQuery.data?.total ?? 0}
-          color="text-warning-500"
-          loading={alertsQuery.isLoading}
-        />
-        <StatCard
-          icon={AlertTriangle}
-          label="Critical Threats"
-          value={criticalAlerts.length}
-          color="text-danger-400"
-          loading={alertsQuery.isLoading}
-        />
+        <StatCard icon={Radio} label="Packets Captured" value={captureStatus?.packets_captured ?? 0} color="text-cyber-400" loading={captureStatusQuery.isLoading} />
+        <StatCard icon={Zap} label="Detections" value={detectionStats?.total_detections ?? 0} color="text-cyan-400" loading={detectionStatsQuery.isLoading} />
+        <StatCard icon={BellRing} label="Total Alerts" value={alertsQuery.data?.total ?? 0} color="text-warning-500" loading={alertsQuery.isLoading} />
+        <StatCard icon={AlertTriangle} label="Critical Threats" value={criticalAlerts.length} color="text-danger-400" loading={alertsQuery.isLoading} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -160,16 +146,6 @@ export function DashboardPage() {
               {!captureStatus.available && (
                 <p className="text-xs text-warning-500">{captureStatus.reason}</p>
               )}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <p className="text-xs text-navy-400">Available</p>
-                  <p className="font-mono text-sm text-navy-100">{captureStatus.available ? 'Yes' : 'No'}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-navy-400">Packets</p>
-                  <p className="font-mono text-sm text-navy-100">{captureStatus.packets_captured}</p>
-                </div>
-              </div>
             </div>
           ) : (
             <ErrorState title="Capture status unavailable" />
@@ -285,7 +261,7 @@ export function DashboardPage() {
         <h3 className="mb-4 font-display text-sm font-semibold text-navy-100">Active Network Flows</h3>
         {captureStatsQuery.isLoading ? (
           <LoadingState title="Loading flow data..." />
-        ) : captureStats && captureStats.flow_details.length > 0 ? (
+        ) : captureStatsQuery.data && captureStatsQuery.data.flow_details.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -299,7 +275,7 @@ export function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {captureStats.flow_details.map((flow, i) => (
+                {captureStatsQuery.data.flow_details.map((flow, i) => (
                   <tr key={i} className="border-b border-navy-800/50">
                     <td className="py-2 pr-4 font-mono text-navy-100">{flow.source_ip}</td>
                     <td className="py-2 pr-4 font-mono text-navy-100">{flow.destination_ip}</td>
@@ -316,6 +292,212 @@ export function DashboardPage() {
           <EmptyState title="No active flows" message="No network flows have been captured." />
         )}
       </div>
+    </>
+  );
+}
+
+function AdminPanel() {
+  const { hasPermission } = useAuthStore();
+
+  return (
+    <div className="glass-panel p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <Users className="h-5 w-5 text-cyber-400" />
+        <h3 className="font-display text-sm font-semibold text-navy-100">System Administration</h3>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <Server className="h-5 w-5 text-cyber-400" />
+          <p className="mt-2 text-sm font-medium text-navy-100">System Health</p>
+          <p className="text-xs text-navy-400">Database, Redis, API status</p>
+          <p className="mt-1 font-mono text-xs text-success-400">Operational</p>
+        </div>
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <Users className="h-5 w-5 text-cyan-400" />
+          <p className="mt-2 text-sm font-medium text-navy-100">User Management</p>
+          <p className="text-xs text-navy-400">Roles, permissions, access</p>
+          {hasPermission('admin:manage') && (
+            <p className="mt-1 font-mono text-xs text-cyber-400">Full control</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <SettingsIcon className="h-5 w-5 text-warning-500" />
+          <p className="mt-2 text-sm font-medium text-navy-100">Configuration</p>
+          <p className="text-xs text-navy-400">System settings & tuning</p>
+          {hasPermission('settings:update') && (
+            <p className="mt-1 font-mono text-xs text-warning-500">Editable</p>
+          )}
+        </div>
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <Database className="h-5 w-5 text-success-400" />
+          <p className="mt-2 text-sm font-medium text-navy-100">Data Retention</p>
+          <p className="text-xs text-navy-400">Packets, flows, detections</p>
+          <p className="mt-1 font-mono text-xs text-navy-300">30 days</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalystPanel() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="glass-panel p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <ShieldAlert className="h-5 w-5 text-danger-400" />
+          <h3 className="font-display text-sm font-semibold text-navy-100">Threat Hunting</h3>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between rounded-lg border border-navy-700 bg-navy-800/30 p-3">
+            <div>
+              <p className="text-sm font-medium text-navy-100">Start Packet Capture</p>
+              <p className="text-xs text-navy-400">Monitor network interface for threats</p>
+            </div>
+            <span className="badge border-success-500/30 bg-success-500/10 text-success-400">Available</span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-navy-700 bg-navy-800/30 p-3">
+            <div>
+              <p className="text-sm font-medium text-navy-100">Run Detection</p>
+              <p className="text-xs text-navy-400">ML-based anomaly + attack classification</p>
+            </div>
+            <span className="badge border-success-500/30 bg-success-500/10 text-success-400">Available</span>
+          </div>
+          <div className="flex items-center justify-between rounded-lg border border-navy-700 bg-navy-800/30 p-3">
+            <div>
+              <p className="text-sm font-medium text-navy-100">Triage Alerts</p>
+              <p className="text-xs text-navy-400">Acknowledge, resolve, and investigate</p>
+            </div>
+            <span className="badge border-success-500/30 bg-success-500/10 text-success-400">Available</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="glass-panel p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <TrendingUp className="h-5 w-5 text-cyan-400" />
+          <h3 className="font-display text-sm font-semibold text-navy-100">Detection Pipeline</h3>
+        </div>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Cpu className="h-4 w-4 text-cyber-400" />
+            <div className="flex-1">
+              <p className="text-sm text-navy-100">Autoencoder (Anomaly)</p>
+              <p className="text-xs text-navy-400">Reconstruction error threshold</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <BrainCircuit className="h-4 w-4 text-cyan-400" />
+            <div className="flex-1">
+              <p className="text-sm text-navy-100">XGBoost (Classification)</p>
+              <p className="text-xs text-navy-400">15 attack type classification</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <Lock className="h-4 w-4 text-success-400" />
+            <div className="flex-1">
+              <p className="text-sm text-navy-100">PQC Encryption</p>
+              <p className="text-xs text-navy-400">Kyber + AES-GCM alert encryption</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ViewerPanel() {
+  return (
+    <div className="glass-panel p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <Eye className="h-5 w-5 text-cyber-400" />
+        <h3 className="font-display text-sm font-semibold text-navy-100">Read-Only Access</h3>
+      </div>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <Activity className="h-5 w-5 text-cyber-400" />
+          <p className="mt-2 text-sm font-medium text-navy-100">Security Dashboard</p>
+          <p className="text-xs text-navy-400">Real-time threat overview</p>
+        </div>
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <BellRing className="h-5 w-5 text-warning-500" />
+          <p className="mt-2 text-sm font-medium text-navy-100">Alert Visibility</p>
+          <p className="text-xs text-navy-400">View all security alerts</p>
+        </div>
+        <div className="rounded-lg border border-navy-700 bg-navy-800/30 p-4">
+          <ShieldAlert className="h-5 w-5 text-danger-400" />
+          <p className="mt-2 text-sm font-medium text-navy-100">Threat Intelligence</p>
+          <p className="text-xs text-navy-400">Browse threat intel reports</p>
+        </div>
+      </div>
+      <p className="mt-4 text-xs text-navy-400">
+        You have read-only access. Contact an administrator if you need elevated permissions for threat detection or alert management.
+      </p>
+    </div>
+  );
+}
+
+export function DashboardPage() {
+  const { user } = useAuthStore();
+  const role = user?.role || 'viewer';
+
+  const healthQuery = useQuery({ queryKey: ['health'], queryFn: dashboardApi.health, refetchInterval: 30000 });
+  const captureStatusQuery = useQuery({ queryKey: ['capture', 'status'], queryFn: captureApi.status, refetchInterval: 5000 });
+  const captureStatsQuery = useQuery({ queryKey: ['capture', 'statistics'], queryFn: captureApi.statistics, refetchInterval: 5000 });
+  const detectionStatusQuery = useQuery({ queryKey: ['detection', 'status'], queryFn: dashboardApi.detectionStatus, refetchInterval: 5000 });
+  const detectionStatsQuery = useQuery({ queryKey: ['detection', 'statistics'], queryFn: dashboardApi.detectionStatistics, refetchInterval: 10000 });
+  const modelStatusQuery = useQuery({ queryKey: ['detection', 'model'], queryFn: dashboardApi.modelStatus, refetchInterval: 30000 });
+  const alertsQuery = useQuery({ queryKey: ['alerts', 'dashboard'], queryFn: () => alertApi.list(1, 100), refetchInterval: 10000 });
+
+  if (healthQuery.isError) {
+    return <BackendOfflineState />;
+  }
+  if (healthQuery.isLoading) {
+    return <LoadingState title="Initializing dashboard..." />;
+  }
+
+  const roleLabel = ROLE_LABELS[role];
+  const roleDescription = ROLE_DESCRIPTIONS[role];
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-navy-50">Security Operations Dashboard</h1>
+          <p className="text-sm text-navy-400">{roleDescription}</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <span className={cn(
+            'badge',
+            role === 'admin' && 'border-cyber-400/30 bg-cyber-400/10 text-cyber-400',
+            role === 'analyst' && 'border-cyan-400/30 bg-cyan-400/10 text-cyan-400',
+            role === 'viewer' && 'border-navy-600 bg-navy-700/50 text-navy-300',
+          )}>
+            {roleLabel}
+          </span>
+          <WsIndicator />
+        </div>
+      </div>
+
+      {role === 'admin' && (
+        <AdminPanel />
+      )}
+
+      <SharedStats
+        captureStatusQuery={captureStatusQuery}
+        captureStatsQuery={captureStatsQuery}
+        detectionStatusQuery={detectionStatusQuery}
+        detectionStatsQuery={detectionStatsQuery}
+        modelStatusQuery={modelStatusQuery}
+        alertsQuery={alertsQuery}
+      />
+
+      {role === 'analyst' && (
+        <AnalystPanel />
+      )}
+
+      {role === 'viewer' && (
+        <ViewerPanel />
+      )}
     </div>
   );
 }

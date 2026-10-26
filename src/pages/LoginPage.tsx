@@ -1,12 +1,21 @@
 import { type FormEvent, useState } from 'react';
 import { useNavigate, Link } from '@tanstack/react-router';
-import { ShieldCheck, Mail, Lock, Loader2 } from 'lucide-react';
+import { ShieldCheck, Mail, Lock, Loader2, Shield, Eye, Terminal } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'sonner';
+import { cn } from '../utils/cn';
+import type { UserRole } from '../api/types';
+
+const ROLE_INFO: { value: UserRole; label: string; description: string; icon: typeof Shield }[] = [
+  { value: 'admin', label: 'Administrator', description: 'Full access including user management', icon: Shield },
+  { value: 'analyst', label: 'Security Analyst', description: 'Threat detection and alert management', icon: Terminal },
+  { value: 'viewer', label: 'Viewer', description: 'Read-only dashboards and alerts', icon: Eye },
+];
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedRole, setSelectedRole] = useState<UserRole>('analyst');
   const [submitting, setSubmitting] = useState(false);
   const { login } = useAuthStore();
   const navigate = useNavigate();
@@ -36,6 +45,37 @@ export function LoginPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="glass-panel space-y-4 p-6">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-navy-200">Your Role</label>
+            <div className="grid grid-cols-3 gap-2">
+              {ROLE_INFO.map((option) => {
+                const Icon = option.icon;
+                const selected = selectedRole === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setSelectedRole(option.value)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-lg border p-3 transition-all',
+                      selected
+                        ? 'border-cyber-400/60 bg-cyber-400/10'
+                        : 'border-navy-700 bg-navy-800/30 hover:border-navy-600'
+                    )}
+                  >
+                    <Icon className={cn('h-5 w-5', selected ? 'text-cyber-400' : 'text-navy-400')} />
+                    <span className={cn('text-xs font-medium text-center', selected ? 'text-cyber-300' : 'text-navy-200')}>
+                      {option.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-navy-400">
+              {ROLE_INFO.find((r) => r.value === selectedRole)?.description}
+            </p>
+          </div>
+
           <div className="space-y-1.5">
             <label htmlFor="email" className="text-sm font-medium text-navy-200">Email</label>
             <div className="relative">

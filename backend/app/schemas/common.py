@@ -9,6 +9,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=12, max_length=128)
     full_name: str = Field(default="", max_length=200)
+    role: str = Field(default="viewer", description="One of: admin, analyst, viewer")
 
 class LoginRequest(BaseModel):
     email: EmailStr
