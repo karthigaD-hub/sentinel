@@ -8,29 +8,18 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string, role?: UserRole) => Promise<void>;
+  register: (email: string, password: string, fullName?: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchUser: () => Promise<void>;
   hasRole: (...roles: UserRole[]) => boolean;
   hasPermission: (permission: string) => boolean;
 }
 
-const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin: [
-    'dashboard:view', 'capture:view', 'capture:start', 'capture:stop',
-    'detection:view', 'alerts:view', 'alerts:update', 'threatintel:view',
-    'assistant:use', 'reports:view', 'quantum:view', 'settings:view', 'settings:update', 'admin:manage',
-  ],
-  analyst: [
-    'dashboard:view', 'capture:view', 'capture:start', 'capture:stop',
-    'detection:view', 'alerts:view', 'alerts:update', 'threatintel:view',
-    'assistant:use', 'reports:view', 'quantum:view', 'settings:view',
-  ],
-  viewer: [
-    'dashboard:view', 'alerts:view', 'detection:view', 'threatintel:view',
-    'reports:view', 'quantum:view', 'settings:view',
-  ],
-};
+const USER_PERMISSIONS: string[] = [
+  'dashboard:view', 'capture:view', 'capture:start', 'capture:stop',
+  'detection:view', 'alerts:view', 'alerts:update', 'threatintel:view',
+  'assistant:use', 'reports:view', 'quantum:view', 'settings:view', 'settings:update',
+];
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
@@ -44,8 +33,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ user, isAuthenticated: true });
   },
 
-  register: async (email, password, fullName, role) => {
-    await authApi.register({ email, password, full_name: fullName, role });
+  register: async (email, password, fullName) => {
+    await authApi.register({ email, password, full_name: fullName });
     await get().login(email, password);
   },
 
@@ -81,6 +70,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   hasPermission: (permission: string) => {
     const { user } = get();
     if (!user) return false;
-    return ROLE_PERMISSIONS[user.role]?.includes(permission) ?? false;
+    return USER_PERMISSIONS.includes(permission);
   },
 }));

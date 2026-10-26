@@ -1,9 +1,7 @@
 from enum import StrEnum
 
 class RoleName(StrEnum):
-    ADMIN = "admin"
-    ANALYST = "analyst"
-    VIEWER = "viewer"
+    USER = "user"
 
 class PermissionName(StrEnum):
     DASHBOARD_VIEW = "dashboard:view"
@@ -19,6 +17,5 @@ class PermissionName(StrEnum):
     QUANTUM_VIEW = "quantum:view"
     SETTINGS_VIEW = "settings:view"
     SETTINGS_UPDATE = "settings:update"
-    ADMIN_MANAGE = "admin:manage"
 
 ALL_PERMISSIONS = [item.value for item in PermissionName]

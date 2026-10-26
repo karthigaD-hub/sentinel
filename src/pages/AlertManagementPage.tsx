@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, RotateCcw } from 'lucide-react';
+import { useNavigate } from '@tanstack/react-router';
+import { CheckCircle2, RotateCcw, Bot } from 'lucide-react';
 import { alertApi } from '../api/alertApi';
 import { useAuthStore } from '../store/authStore';
 import { LoadingState, EmptyState, BackendOfflineState } from '../components/StateComponents';
@@ -11,6 +12,7 @@ export function AlertManagementPage() {
   const [page, setPage] = useState(1);
   const queryClient = useQueryClient();
   const { hasPermission } = useAuthStore();
+  const navigate = useNavigate();
 
   const alertsQuery = useQuery({ queryKey: ['alerts', page], queryFn: () => alertApi.list(page, 50), refetchInterval: 10000 });
   const canUpdate = hasPermission('alerts:update');
@@ -37,11 +39,16 @@ export function AlertManagementPage() {
 
   const alerts = alertsQuery.data;
 
+  const handleInvestigate = (alertTitle: string, alertSeverity: string, alertDescription: string) => {
+    const investigationQuery = `I need to investigate this security alert:\n\nAlert: ${alertTitle}\nSeverity: ${alertSeverity}\nDetails: ${alertDescription}\n\nWhat type of attack is this? What does it mean? Why was it detected? What is the severity level? What should I investigate next? What mitigation steps are recommended?`;
+    navigate({ to: '/assistant', search: { q: investigationQuery } });
+  };
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-navy-50">Alert Management</h1>
-        <p className="text-sm text-navy-400">Security alert lifecycle management</p>
+        <p className="text-sm text-navy-400">Security alert lifecycle management with AI investigation</p>
       </div>
 
       <div className="glass-panel p-5">
@@ -77,6 +84,13 @@ export function AlertManagementPage() {
                       <td className="py-3 pr-4 font-mono text-xs text-navy-300">{formatTimestamp(alert.created_at)}</td>
                       <td className="py-3 pr-4">
                         <div className="flex gap-1.5">
+                          <button
+                            onClick={() => handleInvestigate(alert.title, alert.severity, alert.description)}
+                            className="flex items-center gap-1 rounded p-1.5 text-cyber-400 transition-colors hover:bg-cyber-500/10"
+                            title="Investigate with AI"
+                          >
+                            <Bot className="h-4 w-4" />
+                          </button>
                           {alert.status === 'open' && (
                             <button
                               onClick={() => acknowledgeMutation.mutate(alert.id)}

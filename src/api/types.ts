@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'analyst' | 'viewer';
+export type UserRole = 'user';
 
 export interface User {
   id: string;
@@ -24,7 +24,6 @@ export interface UserCreate {
   email: string;
   password: string;
   full_name?: string;
-  role?: UserRole;
 }
 
 export interface PaginatedResponse<T = unknown> {
