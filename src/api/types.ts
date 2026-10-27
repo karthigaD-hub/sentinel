@@ -145,6 +145,14 @@ export interface DetectionResultItem {
   confidence: number;
   model_version: string;
   detected_at: string;
+  source_ip: string | null;
+  destination_ip: string | null;
+  protocol: string | null;
+  source_port: number | null;
+  destination_port: number | null;
+  severity: string | null;
+  classification: string | null;
+  anomaly_score: number | null;
 }
 
 export interface DetectionStatus {
@@ -156,6 +164,23 @@ export interface DetectionStatus {
 
 export interface DetectionStatistics {
   total_detections: number;
+  by_label: Record<string, number>;
+  by_severity: Record<string, number>;
+  by_classification: Record<string, number>;
+}
+
+export interface DetectionHistoryBucket {
+  timestamp: string;
+  total: number;
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface DetectionHistory {
+  hours: number;
+  buckets: DetectionHistoryBucket[];
 }
 
 export interface MetricValues {

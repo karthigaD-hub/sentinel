@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { HealthStatus, SystemStatus, DetectionStatus, DetectionStatistics, ModelStatus, ModelMetrics } from './types';
+import type { HealthStatus, SystemStatus, DetectionStatus, DetectionStatistics, DetectionHistory, ModelStatus, ModelMetrics } from './types';
 
 export const dashboardApi = {
   health: () =>
@@ -13,6 +13,9 @@ export const dashboardApi = {
 
   detectionStatistics: () =>
     apiClient.get<DetectionStatistics>('/api/v1/detection/statistics').then((r) => r.data),
+
+  detectionHistory: (hours = 24) =>
+    apiClient.get<DetectionHistory>(`/api/v1/detection/history?hours=${hours}`).then((r) => r.data),
 
   modelStatus: () =>
     apiClient.get<ModelStatus>('/api/v1/detection/model/status').then((r) => r.data),

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ShieldAlert, Play, Square, Loader2, Activity, BrainCircuit } from 'lucide-react';
+import { ShieldAlert, Play, Square, Loader2, Activity, BrainCircuit, Network } from 'lucide-react';
 import { detectionApi } from '../api/detectionApi';
 import { captureApi } from '../api/captureApi';
 import { useAuthStore } from '../store/authStore';
 import { LoadingState, EmptyState, BackendOfflineState, ModelUnavailable } from '../components/StateComponents';
 import { toast } from 'sonner';
-import { cn, formatTimestamp, classificationColor } from '../utils/cn';
+import { cn, formatTimestamp, classificationColor, severityColor } from '../utils/cn';
 
 export function ThreatDetectionPage() {
   const [page, setPage] = useState(1);
@@ -45,6 +45,7 @@ export function ThreatDetectionPage() {
   const status = statusQuery.data;
   const modelStatus = modelStatusQuery.data;
   const results = resultsQuery.data;
+  const stats = statsQuery.data;
   const canStart = hasPermission('capture:start');
   const canStop = hasPermission('capture:stop');
 
@@ -59,6 +60,10 @@ export function ThreatDetectionPage() {
       </div>
     );
   }
+
+  const labelEntries = stats ? Object.entries(stats.by_label).sort((a, b) => b[1] - a[1]) : [];
+  const severityEntries = stats ? Object.entries(stats.by_severity).sort((a, b) => b[1] - a[1]) : [];
+  const classificationEntries = stats ? Object.entries(stats.by_classification).sort((a, b) => b[1] - a[1]) : [];
 
   return (
     <div className="space-y-6">
@@ -117,7 +122,7 @@ export function ThreatDetectionPage() {
             <ShieldAlert className="h-4 w-4" />
             <span className="text-xs uppercase tracking-wider">Total Detections</span>
           </div>
-          <p className="mt-2 font-display text-xl font-bold text-cyber-400">{statsQuery.data?.total_detections ?? 0}</p>
+          <p className="mt-2 font-display text-xl font-bold text-cyber-400">{stats?.total_detections ?? 0}</p>
         </div>
         <div className="glass-card p-4">
           <div className="flex items-center gap-2 text-navy-400">
@@ -129,6 +134,50 @@ export function ThreatDetectionPage() {
           </p>
         </div>
       </div>
+
+      {stats && (labelEntries.length > 0 || severityEntries.length > 0 || classificationEntries.length > 0) && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {labelEntries.length > 0 && (
+            <div className="glass-panel p-5">
+              <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Attack Type</h3>
+              <div className="space-y-2">
+                {labelEntries.map(([label, count]) => (
+                  <div key={label} className="flex items-center justify-between">
+                    <span className={cn('badge', classificationColor(label))}>{label}</span>
+                    <span className="font-mono text-sm text-navy-200">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {severityEntries.length > 0 && (
+            <div className="glass-panel p-5">
+              <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Severity</h3>
+              <div className="space-y-2">
+                {severityEntries.map(([sev, count]) => (
+                  <div key={sev} className="flex items-center justify-between">
+                    <span className={cn('badge border', severityColor(sev))}>{sev}</span>
+                    <span className="font-mono text-sm text-navy-200">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {classificationEntries.length > 0 && (
+            <div className="glass-panel p-5">
+              <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Classification</h3>
+              <div className="space-y-2">
+                {classificationEntries.map(([cls, count]) => (
+                  <div key={cls} className="flex items-center justify-between">
+                    <span className={cn('badge', classificationColor(cls))}>{cls}</span>
+                    <span className="font-mono text-sm text-navy-200">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {modelStatus?.metrics_available && modelStatus.metrics && (
         <div className="glass-panel p-5">
@@ -179,9 +228,15 @@ export function ThreatDetectionPage() {
                 <thead>
                   <tr className="border-b border-navy-700 text-left text-xs uppercase text-navy-400">
                     <th className="pb-2 pr-4 font-medium">Timestamp</th>
-                    <th className="pb-2 pr-4 font-medium">Label</th>
+                    <th className="pb-2 pr-4 font-medium">Attack Type</th>
+                    <th className="pb-2 pr-4 font-medium">Severity</th>
+                    <th className="pb-2 pr-4 font-medium">Classification</th>
+                    <th className="pb-2 pr-4 font-medium">Source IP</th>
+                    <th className="pb-2 pr-4 font-medium">Destination IP</th>
+                    <th className="pb-2 pr-4 font-medium">Protocol</th>
+                    <th className="pb-2 pr-4 font-medium">Ports</th>
                     <th className="pb-2 pr-4 font-medium">Confidence</th>
-                    <th className="pb-2 pr-4 font-medium">Model Version</th>
+                    <th className="pb-2 pr-4 font-medium">Anomaly Score</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,8 +246,35 @@ export function ThreatDetectionPage() {
                       <td className="py-2 pr-4">
                         <span className={cn('badge', classificationColor(det.label))}>{det.label}</span>
                       </td>
+                      <td className="py-2 pr-4">
+                        {det.severity ? (
+                          <span className={cn('badge border', severityColor(det.severity))}>{det.severity}</span>
+                        ) : (
+                          <span className="text-navy-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {det.classification ? (
+                          <span className={cn('badge', classificationColor(det.classification))}>{det.classification}</span>
+                        ) : (
+                          <span className="text-navy-500">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs text-navy-100">
+                        <span className="flex items-center gap-1">
+                          <Network className="h-3 w-3 text-navy-500" />
+                          {det.source_ip || '—'}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4 font-mono text-xs text-navy-100">{det.destination_ip || '—'}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-cyan-400">{det.protocol || '—'}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-navy-200">
+                        {det.source_port ?? '*'} → {det.destination_port ?? '*'}
+                      </td>
                       <td className="py-2 pr-4 font-mono text-navy-200">{(det.confidence * 100).toFixed(1)}%</td>
-                      <td className="py-2 pr-4 font-mono text-xs text-navy-400">{det.model_version}</td>
+                      <td className="py-2 pr-4 font-mono text-xs text-navy-200">
+                        {det.anomaly_score != null ? det.anomaly_score.toFixed(4) : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -43,7 +43,7 @@ export function ForgotPasswordPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="input-field pl-10"
-                placeholder="analyst@example.com"
+                placeholder="you@example.com"
               />
             </div>
           </div>

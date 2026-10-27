@@ -101,17 +101,32 @@ class DetectionPipeline:
         if self._db_session_factory is None:
             return
 
+        flow_state = self._flow_features.get_flow_state(flow_key)
+        flow_src_ip = flow_state.source_ip if flow_state else meta.source_ip
+        flow_dst_ip = flow_state.destination_ip if flow_state else meta.destination_ip
+        flow_protocol = flow_state.protocol if flow_state else meta.protocol
+        flow_src_port = flow_state.source_port if flow_state else meta.source_port
+        flow_dst_port = flow_state.destination_port if flow_state else meta.destination_port
+
         async with self._db_session_factory() as session:
             detection = Detection(
                 label=result.label,
                 confidence=result.confidence,
                 model_version=detection_engine.anomaly_detector.model.config.get("trained_at", "unknown") if detection_engine.anomaly_detector.model else "unknown",
                 detected_at=datetime.now(timezone.utc),
+                source_ip=flow_src_ip,
+                destination_ip=flow_dst_ip,
+                protocol=flow_protocol,
+                source_port=flow_src_port,
+                destination_port=flow_dst_port,
+                severity=result.severity,
+                classification=result.classification,
+                anomaly_score=result.anomaly_score,
             )
             session.add(detection)
             await session.flush()
 
-            alert_title = f"{result.classification}: {result.label} from {meta.source_ip}"
+            alert_title = f"{result.classification}: {result.label} from {flow_src_ip}:{flow_src_port or '*'} to {flow_dst_ip}:{flow_dst_port or '*'} ({flow_protocol})"
             alert = Alert(
                 detection_id=detection.id,
                 title=alert_title,

@@ -1,5 +1,5 @@
 import { apiClient } from './client';
-import type { DetectionStatus, DetectionResultItem, DetectionStatistics, ModelStatus, ModelMetrics, PaginatedResponse } from './types';
+import type { DetectionStatus, DetectionResultItem, DetectionStatistics, DetectionHistory, ModelStatus, ModelMetrics, PaginatedResponse } from './types';
 
 export const detectionApi = {
   status: () =>
@@ -16,6 +16,9 @@ export const detectionApi = {
 
   statistics: () =>
     apiClient.get<DetectionStatistics>('/api/v1/detection/statistics').then((r) => r.data),
+
+  history: (hours = 24) =>
+    apiClient.get<DetectionHistory>(`/api/v1/detection/history?hours=${hours}`).then((r) => r.data),
 
   modelStatus: () =>
     apiClient.get<ModelStatus>('/api/v1/detection/model/status').then((r) => r.data),

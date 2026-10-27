@@ -7,6 +7,7 @@ import {
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, Legend,
+  Area, AreaChart,
 } from 'recharts';
 import { dashboardApi } from '../api/dashboardApi';
 import { captureApi } from '../api/captureApi';
@@ -128,6 +129,7 @@ export function DashboardPage() {
   const captureStatsQuery = useQuery({ queryKey: ['capture', 'statistics'], queryFn: captureApi.statistics, refetchInterval: 5000 });
   const detectionStatusQuery = useQuery({ queryKey: ['detection', 'status'], queryFn: dashboardApi.detectionStatus, refetchInterval: 5000 });
   const detectionStatsQuery = useQuery({ queryKey: ['detection', 'statistics'], queryFn: dashboardApi.detectionStatistics, refetchInterval: 10000 });
+  const detectionHistoryQuery = useQuery({ queryKey: ['detection', 'history'], queryFn: () => dashboardApi.detectionHistory(24), refetchInterval: 15000 });
   const modelStatusQuery = useQuery({ queryKey: ['detection', 'model'], queryFn: dashboardApi.modelStatus, refetchInterval: 30000 });
   const alertsQuery = useQuery({ queryKey: ['alerts', 'dashboard'], queryFn: () => alertApi.list(1, 100), refetchInterval: 10000 });
 
@@ -139,8 +141,10 @@ export function DashboardPage() {
   }
 
   const captureStatus = captureStatusQuery.data;
+  const captureStats = captureStatsQuery.data;
   const detectionStatus = detectionStatusQuery.data;
   const detectionStats = detectionStatsQuery.data;
+  const detectionHistory = detectionHistoryQuery.data;
   const modelStatus = modelStatusQuery.data;
   const alerts = alertsQuery.data?.items || [];
 
@@ -174,9 +178,10 @@ export function DashboardPage() {
         <WsIndicator />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard icon={Radio} label="Packets Captured" value={captureStatus?.packets_captured ?? 0} color="text-cyber-400" loading={captureStatusQuery.isLoading} />
-        <StatCard icon={Zap} label="Detections" value={detectionStats?.total_detections ?? 0} color="text-cyan-400" loading={detectionStatsQuery.isLoading} />
+        <StatCard icon={Activity} label="Active Flows" value={captureStats?.active_flows ?? 0} color="text-cyan-400" loading={captureStatsQuery.isLoading} />
+        <StatCard icon={Zap} label="Detections" value={detectionStats?.total_detections ?? 0} color="text-warning-500" loading={detectionStatsQuery.isLoading} />
         <StatCard icon={BellRing} label="Total Alerts" value={alertsQuery.data?.total ?? 0} color="text-warning-500" loading={alertsQuery.isLoading} />
         <StatCard icon={AlertTriangle} label="Critical Threats" value={criticalAlerts.length} color="text-danger-400" loading={alertsQuery.isLoading} />
       </div>
@@ -273,6 +278,98 @@ export function DashboardPage() {
       </div>
 
       <SecurityWorkflowPanel />
+
+      {detectionHistory && detectionHistory.buckets.length > 0 && (
+        <div className="glass-panel p-5">
+          <h3 className="mb-4 font-display text-sm font-semibold text-navy-100">Detection History (Last 24 Hours)</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <AreaChart data={detectionHistory.buckets}>
+              <defs>
+                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#3399ff" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#3399ff" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="colorCritical" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#1e3560" />
+              <XAxis dataKey="timestamp" stroke="#7a99c9" fontSize={10} tickFormatter={(v) => new Date(v).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} />
+              <YAxis stroke="#7a99c9" fontSize={12} allowDecimals={false} />
+              <Tooltip
+                contentStyle={{ background: '#0f1c38', border: '1px solid #1e3560', borderRadius: '8px' }}
+                labelFormatter={(v) => new Date(v).toLocaleString('en-US')}
+              />
+              <Legend wrapperStyle={{ fontSize: '12px' }} />
+              <Area type="monotone" dataKey="total" name="Total" stroke="#3399ff" fill="url(#colorTotal)" strokeWidth={2} />
+              <Area type="monotone" dataKey="critical" name="Critical" stroke="#ef4444" fill="url(#colorCritical)" strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
+      {detectionStats && (
+        (Object.keys(detectionStats.by_label).length > 0 ||
+         Object.keys(detectionStats.by_severity).length > 0 ||
+         Object.keys(detectionStats.by_classification).length > 0) && (
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            {Object.keys(detectionStats.by_label).length > 0 && (
+              <div className="glass-panel p-5">
+                <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Attack Type</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={Object.entries(detectionStats.by_label).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e3560" />
+                    <XAxis dataKey="name" stroke="#7a99c9" fontSize={10} angle={-20} textAnchor="end" height={60} />
+                    <YAxis stroke="#7a99c9" fontSize={12} allowDecimals={false} />
+                    <Tooltip contentStyle={{ background: '#0f1c38', border: '1px solid #1e3560', borderRadius: '8px' }} />
+                    <Bar dataKey="value" fill="#22d3ee" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {Object.keys(detectionStats.by_severity).length > 0 && (
+              <div className="glass-panel p-5">
+                <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Severity</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <PieChart>
+                    <Pie
+                      data={Object.entries(detectionStats.by_severity).map(([name, value]) => ({ name, value }))}
+                      dataKey="value"
+                      nameKey="name"
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={70}
+                      label
+                    >
+                      {Object.entries(detectionStats.by_severity).map(([sev], i) => {
+                        const color = sev.toLowerCase() === 'critical' ? '#ef4444' : sev.toLowerCase() === 'high' ? '#f59e0b' : sev.toLowerCase() === 'medium' ? '#22d3ee' : '#22c55e';
+                        return <Cell key={i} fill={color} />;
+                      })}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: '#0f1c38', border: '1px solid #1e3560', borderRadius: '8px' }} />
+                    <Legend wrapperStyle={{ fontSize: '12px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {Object.keys(detectionStats.by_classification).length > 0 && (
+              <div className="glass-panel p-5">
+                <h3 className="mb-3 font-display text-sm font-semibold text-navy-100">Detections by Classification</h3>
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={Object.entries(detectionStats.by_classification).map(([name, value]) => ({ name, value }))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e3560" />
+                    <XAxis dataKey="name" stroke="#7a99c9" fontSize={10} angle={-20} textAnchor="end" height={60} />
+                    <YAxis stroke="#7a99c9" fontSize={12} allowDecimals={false} />
+                    <Tooltip contentStyle={{ background: '#0f1c38', border: '1px solid #1e3560', borderRadius: '8px' }} />
+                    <Bar dataKey="value" fill="#3399ff" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        )
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="glass-panel p-5">

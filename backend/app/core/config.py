@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     llm_provider: str = ""
     llm_model: str = ""
     llm_api_key: str = ""
+    llm_base_url: str = ""
     rag_database: str = ""
     model_directory: str = "./models"
     rag_embedding_model: str = "all-MiniLM-L6-v2"
