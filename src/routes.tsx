@@ -115,6 +115,9 @@ const assistantRoute = createRoute({
   getParentRoute: () => appRoute,
   path: '/assistant',
   component: AIAssistantPage,
+  validateSearch: (search: Record<string, unknown>) => ({
+    q: typeof search.q === 'string' ? search.q : undefined,
+  }),
 })
 
 const alertsRoute = createRoute({

@@ -14,7 +14,7 @@ import { alertApi } from '../api/alertApi';
 import { useWsStore } from '../store/wsStore';
 import { LoadingState, ErrorState, BackendOfflineState, EmptyState } from '../components/StateComponents';
 import { cn } from '../utils/cn';
-import type { CaptureStatus, CaptureStatistics, DetectionStatus, DetectionStatistics, ModelStatus, AlertRead, PaginatedResponse } from '../api/types';
+import type { AlertRead } from '../api/types';
 
 const PIE_COLORS = ['#22d3ee', '#3399ff', '#f59e0b', '#ef4444', '#22c55e'];
 
@@ -55,12 +55,6 @@ function WsIndicator() {
     </div>
   );
 }
-
-type QueryResult<T> = {
-  data: T | undefined;
-  isLoading: boolean;
-  isError: boolean;
-};
 
 function SecurityWorkflowPanel() {
   return (

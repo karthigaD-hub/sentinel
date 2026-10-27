@@ -106,7 +106,7 @@ export function PermissionDenied({ className }: { className?: string }) {
     <div className={cn('flex flex-col items-center justify-center gap-3 py-16 text-center', className)}>
       <Lock className="h-10 w-10 text-warning-500" />
       <h3 className="font-display text-lg font-semibold text-navy-100">Permission denied</h3>
-      <p className="max-w-md text-sm text-navy-300">You do not have permission to view this page. Contact an administrator if you believe this is an error.</p>
+      <p className="max-w-md text-sm text-navy-300">You do not have permission to view this page.</p>
     </div>
   );
 }
@@ -116,7 +116,7 @@ export function ForbiddenState({ className }: { className?: string }) {
     <div className={cn('flex flex-col items-center justify-center gap-3 py-16 text-center', className)}>
       <Ban className="h-10 w-10 text-danger-400" />
       <h3 className="font-display text-lg font-semibold text-navy-100">Access forbidden</h3>
-      <p className="max-w-md text-sm text-navy-300">Your role does not permit this action. Contact an administrator to request elevated access.</p>
+      <p className="max-w-md text-sm text-navy-300">You do not have permission to perform this action.</p>
     </div>
   );
 }

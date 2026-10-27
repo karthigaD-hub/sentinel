@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import { useSearch } from '@tanstack/react-router';
 import { Bot, Send, Loader2, MessageSquare, BookOpen } from 'lucide-react';
 import { assistantApi } from '../api/assistantApi';
 import { ragApi } from '../api/ragApi';
@@ -18,6 +19,9 @@ export function AIAssistantPage() {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const search = useSearch({ strict: false }) as { q?: string };
+  const pendingQuery = useRef<string | null>(null);
+  const sentInitial = useRef(false);
 
   const historyQuery = useQuery({ queryKey: ['assistant', 'history'], queryFn: assistantApi.history });
   const ragStatusQuery = useQuery({ queryKey: ['rag', 'status'], queryFn: ragApi.status });
@@ -38,6 +42,21 @@ export function AIAssistantPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const sendMessage = (text: string) => {
+    if (!text.trim()) return;
+    setMessages((prev) => [...prev, { role: 'user', content: text }]);
+    chatMutation.mutate({ conversation_id: conversationId || undefined, message: text });
+  };
+
+  useEffect(() => {
+    if (sentInitial.current) return;
+    if (search.q && search.q.trim()) {
+      sentInitial.current = true;
+      pendingQuery.current = search.q.trim();
+      sendMessage(search.q.trim());
+    }
+  }, [search.q]);
+
   if (historyQuery.isError && (historyQuery.error as { type?: string })?.type === 'network') {
     return <BackendOfflineState />;
   }
@@ -48,9 +67,8 @@ export function AIAssistantPage() {
     e.preventDefault();
     if (!input.trim() || chatMutation.isPending) return;
     const userMessage = input.trim();
-    setMessages((prev) => [...prev, { role: 'user', content: userMessage }]);
     setInput('');
-    chatMutation.mutate({ conversation_id: conversationId || undefined, message: userMessage });
+    sendMessage(userMessage);
   };
 
   const isLLMUnavailable = messages.some((m) => m.role === 'assistant' && m.content.includes('LLM provider is not configured'));
