@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.database.base import Base, UUIDTimestampMixin
 
@@ -125,6 +125,22 @@ class RAGDocument(UUIDTimestampMixin, Base):
     content: Mapped[str] = mapped_column(Text)
     metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
     embedding: Mapped[list[float] | None] = mapped_column(JSON)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    chunks: Mapped[list["RAGChunk"]] = relationship(back_populates="document", cascade="all, delete-orphan")
+
+class RAGChunk(UUIDTimestampMixin, Base):
+    __tablename__ = "rag_chunks"
+    document_id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("rag_documents.id", ondelete="CASCADE"), index=True)
+    chunk_index: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(200))
+    external_id: Mapped[str] = mapped_column(String(200))
+    text: Mapped[str] = mapped_column(Text)
+    text_hash: Mapped[str] = mapped_column(String(64), index=True)
+    embedding: Mapped[list[float]] = mapped_column(ARRAY(Float))
+    embedding_model: Mapped[str] = mapped_column(String(200))
+    metadata_json: Mapped[dict] = mapped_column(JSON, default=dict)
+    document: Mapped[RAGDocument] = relationship(back_populates="chunks")
+    __table_args__ = (UniqueConstraint("document_id", "chunk_index", name="uq_rag_chunks_document_index"),)
 
 class AssistantConversation(UUIDTimestampMixin, Base):
     __tablename__ = "assistant_conversations"
