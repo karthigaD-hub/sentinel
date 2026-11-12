@@ -1,39 +1,40 @@
+import asyncio
+import importlib.util
+
 import numpy as np
+
+from app.core.config import settings
 
 
 class EmbeddingService:
-    def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
+    def __init__(self, model_name: str) -> None:
         self.model_name = model_name
         self._model = None
 
-    def _load_model(self) -> None:
+    @property
+    def loaded(self) -> bool:
+        return self._model is not None
+
+    @staticmethod
+    def library_installed() -> bool:
+        return importlib.util.find_spec("sentence_transformers") is not None
+
+    def load(self) -> None:
         if self._model is not None:
             return
-        try:
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self.model_name)
-        except ImportError as exc:
-            raise RuntimeError(
-                "sentence-transformers is not installed. Install with: pip install sentence-transformers"
-            ) from exc
+        from sentence_transformers import SentenceTransformer
 
-    def embed(self, texts: str | list[str]) -> np.ndarray:
-        self._load_model()
-        if isinstance(texts, str):
-            texts = [texts]
-        embeddings = self._model.encode(texts, convert_to_numpy=True)
-        return embeddings
+        self._model = SentenceTransformer(self.model_name)
 
-    def embed_query(self, query: str) -> np.ndarray:
-        return self.embed([query])[0]
+    def _encode(self, texts: list[str]) -> np.ndarray:
+        self.load()
+        vectors = self._model.encode(texts, convert_to_numpy=True, normalize_embeddings=True, show_progress_bar=False)
+        return np.asarray(vectors, dtype=np.float32)
 
-    @property
-    def available(self) -> bool:
-        try:
-            from sentence_transformers import SentenceTransformer  # noqa: F401
-            return True
-        except ImportError:
-            return False
+    async def embed(self, texts: list[str]) -> np.ndarray:
+        if not texts:
+            return np.zeros((0, 0), dtype=np.float32)
+        return await asyncio.to_thread(self._encode, texts)
 
 
-embedding_service = EmbeddingService()
+embedding_service = EmbeddingService(settings.rag_embedding_model)

@@ -8,9 +8,11 @@ from app.database.session import get_db
 from app.models import Detection, RAGDocument, AssistantConversation, AssistantMessage, User
 from app.schemas import ChatRequest, ChatResponse, PaginatedResponse, RAGQueryRequest
 from app.security.dependencies import get_current_user, require_permission
-from app.rag.service import rag_service
+from app.core.config import settings
+from app.rag.service import RAGIngestError, rag_service
 from app.rag.schemas import RAGDocumentCreate
 from app.llm.assistant_service import assistant_service
+from app.llm.service import llm_service
 
 router = APIRouter(tags=["Platform"])
 
@@ -33,9 +35,8 @@ async def explanation(detection_id: UUID, _: User = Depends(require_permission(P
 
 @router.get("/threat-intel")
 async def threat_intel(_: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW)), session: AsyncSession = Depends(get_db)) -> dict:
-    from sqlalchemy import func
-    count = int((await session.execute(select(func.count()).select_from(RAGDocument))).scalar_one())
-    return {"available": rag_service.available, "documents": count, "rag_status": rag_service.get_status()}
+    status = await rag_service.status(session)
+    return {"available": rag_service.available, "documents": status["documents"], "rag_status": status}
 
 
 @router.get("/threat-intel/{reference_id}")
@@ -48,59 +49,64 @@ async def threat_intel_item(reference_id: UUID, session: AsyncSession = Depends(
 
 @router.post("/rag/ingest")
 async def rag_ingest(data: RAGIngestRequest, _: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW)), session: AsyncSession = Depends(get_db)) -> dict:
-    doc = RAGDocumentCreate(
-        source=data.source,
-        external_id=data.external_id,
-        title=data.title,
-        content=data.content,
-        metadata=data.metadata,
-    )
-    chunks_created = rag_service.ingest_document(doc)
-
-    db_doc = RAGDocument(
-        source=data.source,
-        external_id=data.external_id,
-        title=data.title,
-        content=data.content,
-        metadata_json=data.metadata,
-    )
-    session.add(db_doc)
-    await session.commit()
-
-    return {"ingested": True, "chunks_created": chunks_created, "document_id": str(db_doc.id)}
+    try:
+        result = await rag_service.ingest(session, RAGDocumentCreate(
+            source=data.source,
+            external_id=data.external_id,
+            title=data.title,
+            content=data.content,
+            metadata=data.metadata,
+        ))
+    except RAGIngestError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"ingested": True, "status": result.status, "chunks_created": result.chunks_indexed, "document_id": result.document_id}
 
 
 @router.get("/rag/status")
-async def rag_status(_: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW))) -> dict:
-    return rag_service.get_status()
+async def rag_status(_: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW)), session: AsyncSession = Depends(get_db)) -> dict:
+    status = await rag_service.status(session)
+    status["llm"] = await llm_service.health()
+    return status
 
 
 @router.post("/rag/search")
 async def rag_search(data: RAGQueryRequest, _: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW))) -> dict:
     if not rag_service.available:
-        return {"available": False, "reason": "RAG index is not configured. Ingest documents first.", "results": []}
-    results = rag_service.search(data.query, top_k=data.top_k)
+        return {"available": False, "reason": "No threat-intelligence documents are indexed yet.", "results": []}
+    retrieval = await rag_service.search(data.query, top_k=data.top_k)
     return {
         "available": True,
         "query": data.query,
-        "results": [r.model_dump() for r in results],
+        "retrieval_ms": retrieval.duration_ms,
+        "results": [
+            {
+                "document_id": hit.chunk.document_id,
+                "chunk_text": hit.chunk.text,
+                "source": hit.chunk.source,
+                "external_id": hit.chunk.external_id,
+                "score": round(hit.similarity, 4),
+                "lexical_score": round(hit.lexical_score, 4),
+                "matched_identifiers": list(hit.matched_identifiers),
+                "metadata": hit.chunk.metadata,
+            }
+            for hit in retrieval.hits
+        ],
     }
 
 
 @router.post("/rag/query")
 async def rag_query(data: RAGQueryRequest, _: User = Depends(require_permission(PermissionName.THREATINTEL_VIEW))) -> dict:
-    if not rag_service.available:
-        return {"available": False, "reason": "RAG index is not configured. Ingest documents first.", "answer": "Insufficient retrieved evidence."}
-    results = rag_service.search(data.query, top_k=data.top_k)
-    if not results:
-        return {"available": True, "answer": "Insufficient retrieved evidence.", "citations": []}
-    from app.llm.service import llm_service
-    if not llm_service.available:
-        return {"available": False, "reason": "LLM provider is not configured", "answer": "Insufficient retrieved evidence.", "citations": []}
-    context = "\n\n".join(f"[{i+1}] Source: {r.source}\n{r.chunk_text}" for i, r in enumerate(results))
-    answer = llm_service.answer(data.query, context)
-    citations = [{"source": r.source, "external_id": r.external_id, "score": r.score} for r in results]
-    return {"available": True, "answer": answer, "citations": citations}
+    result = await assistant_service.answer(data.query, data.top_k)
+    return {
+        "status": result.status,
+        "answer": result.answer,
+        "citations": result.citations,
+        "retrieval_ms": result.retrieval_ms,
+        "generation_ms": result.generation_ms,
+        "model": result.model,
+    }
 
 
 @router.post("/assistant/chat", response_model=ChatResponse)
@@ -115,20 +121,21 @@ async def assistant_chat(data: ChatRequest, user: User = Depends(require_permiss
 
     session.add(AssistantMessage(conversation_id=conversation.id, role="user", content=data.message))
 
-    result = assistant_service.chat(data.message)
+    result = await assistant_service.answer(data.message, settings.rag_default_top_k)
 
     session.add(AssistantMessage(
         conversation_id=conversation.id,
         role="assistant",
-        content=result["answer"],
-        citations=result.get("citations", []),
+        content=result.answer,
+        citations=result.citations,
     ))
     await session.commit()
 
     return ChatResponse(
         conversation_id=conversation.id,
-        answer=result["answer"],
-        citations=result.get("citations", []),
+        answer=result.answer,
+        citations=result.citations,
+        status=result.status,
     )
 
 

@@ -13,6 +13,8 @@ from app.websocket.manager import manager
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging(settings.log_level)
+    async with AsyncSessionLocal() as session:
+        await rag_service.reload(session)
     yield
 
 app = FastAPI(title="Q-Sentinel API", version="1.0.0", lifespan=lifespan)

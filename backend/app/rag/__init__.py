@@ -1,21 +1,12 @@
-from app.rag.service import RAGService, rag_service
-from app.rag.retriever import Retriever, retriever
-from app.rag.embeddings import EmbeddingService, embedding_service
-from app.rag.chunker import chunk_document, chunk_text
-from app.rag.schemas import RAGDocumentCreate, RAGChunk, RAGSearchResult, RAGQueryRequest, RAGSearchResponse
+from app.rag.embeddings import embedding_service
+from app.rag.retriever import RetrievedChunk
+from app.rag.service import RAGIngestError, RetrievalResult, RAGService, rag_service
 
 __all__ = [
+    "RAGIngestError",
     "RAGService",
-    "rag_service",
-    "Retriever",
-    "retriever",
-    "EmbeddingService",
+    "RetrievalResult",
+    "RetrievedChunk",
     "embedding_service",
-    "chunk_document",
-    "chunk_text",
-    "RAGDocumentCreate",
-    "RAGChunk",
-    "RAGSearchResult",
-    "RAGQueryRequest",
-    "RAGSearchResponse",
+    "rag_service",
 ]

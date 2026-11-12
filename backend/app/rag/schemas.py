@@ -1,6 +1,5 @@
-from pydantic import BaseModel
-from datetime import datetime
 from uuid import UUID
+from pydantic import BaseModel
 
 
 class RAGDocumentCreate(BaseModel):
@@ -11,28 +10,12 @@ class RAGDocumentCreate(BaseModel):
     metadata: dict = {}
 
 
-class RAGChunk(BaseModel):
-    document_id: UUID
-    chunk_index: int
-    text: str
-    source: str
-    external_id: str
-    metadata: dict = {}
-
-
 class RAGSearchResult(BaseModel):
+    document_id: UUID
     chunk_text: str
     source: str
     external_id: str
     score: float
+    lexical_score: float
+    matched_identifiers: list[str]
     metadata: dict = {}
-
-
-class RAGQueryRequest(BaseModel):
-    query: str
-    top_k: int = 5
-
-
-class RAGSearchResponse(BaseModel):
-    results: list[RAGSearchResult]
-    query: str

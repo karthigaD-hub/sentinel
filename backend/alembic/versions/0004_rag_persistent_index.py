@@ -73,19 +73,10 @@ def upgrade() -> None:
         op.create_index("ix_rag_chunks_text_hash", "rag_chunks", ["text_hash"])
 
     op.execute("ALTER TABLE rag_chunks ENABLE ROW LEVEL SECURITY")
-    op.execute(
-        """
-        DO $
-        BEGIN
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
-                EXECUTE 'REVOKE ALL ON rag_chunks FROM anon';
-            END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
-                EXECUTE 'REVOKE ALL ON rag_chunks FROM authenticated';
-            END IF;
-        END $
-        """
-    )
+    for role in ("anon", "authenticated"):
+        role_exists = bind.execute(sa.text("SELECT 1 FROM pg_roles WHERE rolname = :role"), {"role": role}).first()
+        if role_exists:
+            op.execute(f'REVOKE ALL ON rag_chunks FROM "{role}"')
 
 
 def downgrade() -> None:
