@@ -7,7 +7,7 @@ from app.core.constants import PermissionName
 from app.database.session import get_db
 from app.models import Detection, RAGDocument, AssistantConversation, AssistantMessage, User
 from app.schemas import ChatRequest, ChatResponse, PaginatedResponse, RAGQueryRequest
-from app.security.dependencies import get_current_user, require_permission
+from app.security.dependencies import require_permission
 from app.core.config import settings
 from app.rag.service import RAGIngestError, rag_service
 from app.rag.schemas import RAGDocumentCreate

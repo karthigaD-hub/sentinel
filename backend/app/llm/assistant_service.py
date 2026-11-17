@@ -32,20 +32,31 @@ class AssistantAnswer:
     completion_tokens: int | None = None
 
 
+def _fit_escaped(text: str, budget: int) -> str:
+    cut = min(len(text), max(budget, 0))
+    body = html.escape(text[:cut], quote=False)
+    while len(body) > budget and cut > 0:
+        cut -= max(1, len(body) - budget)
+        body = html.escape(text[:cut], quote=False)
+    return body
+
+
 def build_context(hits: list[RetrievedChunk], max_chars: int) -> tuple[str, list[RetrievedChunk]]:
     parts: list[str] = []
     used: list[RetrievedChunk] = []
     remaining = max_chars
     for hit in hits:
+        separator = 2 if parts else 0
         header = f'<passage id="{len(used) + 1}" source="{html.escape(hit.chunk.source, quote=True)}" external_id="{html.escape(hit.chunk.external_id, quote=True)}">\n'
         footer = "\n</passage>"
-        body_budget = remaining - len(header) - len(footer)
+        body_budget = remaining - separator - len(header) - len(footer)
         if body_budget < 200:
             break
-        body = html.escape(hit.chunk.text[:body_budget], quote=False)
-        parts.append(header + body + footer)
+        body = _fit_escaped(hit.chunk.text, body_budget)
+        part = header + body + footer
+        parts.append(part)
         used.append(hit)
-        remaining -= len(header) + len(body) + len(footer)
+        remaining -= separator + len(part)
     return "\n\n".join(parts), used
 
 

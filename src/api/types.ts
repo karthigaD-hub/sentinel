@@ -42,16 +42,34 @@ export interface ChatRequest {
   message: string;
 }
 
+export type AssistantStatus =
+  | 'ok'
+  | 'truncated'
+  | 'insufficient_evidence'
+  | 'empty_query'
+  | 'llm_not_configured'
+  | 'rag_unavailable'
+  | 'llm_timeout'
+  | 'llm_unavailable'
+  | 'llm_model_missing'
+  | 'llm_error'
+  | 'llm_malformed_response'
+  | 'llm_empty_response';
+
 export interface ChatResponse {
   conversation_id: string;
   answer: string;
   citations: Citation[];
+  status: AssistantStatus;
 }
 
 export interface Citation {
+  index?: number;
+  document_id?: string;
   source: string;
   external_id: string;
   score: number;
+  matched_identifiers?: string[];
 }
 
 export interface RAGQueryRequest {
@@ -60,10 +78,13 @@ export interface RAGQueryRequest {
 }
 
 export interface RAGSearchResult {
+  document_id: string;
   chunk_text: string;
   source: string;
   external_id: string;
   score: number;
+  lexical_score: number;
+  matched_identifiers: string[];
   metadata: Record<string, unknown>;
 }
 
@@ -71,22 +92,42 @@ export interface RAGSearchResponse {
   available: boolean;
   query?: string;
   reason?: string;
+  retrieval_ms?: number;
   results: RAGSearchResult[];
 }
 
 export interface RAGQueryResponse {
-  available: boolean;
+  status: AssistantStatus;
   answer: string;
-  reason?: string;
   citations: Citation[];
+  retrieval_ms: number | null;
+  generation_ms: number | null;
+  model: string | null;
+}
+
+export interface LLMHealth {
+  reachable: boolean;
+  model_available: boolean;
+  installed_models: string[];
+  error: string | null;
+  base_url: string;
+  model: string;
 }
 
 export interface RAGStatus {
   available: boolean;
   embedding_available: boolean;
+  embedding_loaded: boolean;
+  embedding_model: string;
   chunks_indexed: number;
+  min_similarity: number;
+  last_retrieval_ms: number | null;
+  documents: number;
+  chunks_stored: number;
+  chunks_with_current_embedding_model: number;
+  last_ingested_at: string | null;
   ingested_sources: string[];
-  failed_sources: { source: string; external_id: string; reason: string; timestamp: string }[];
+  llm?: LLMHealth;
 }
 
 export interface RAGIngestRequest {

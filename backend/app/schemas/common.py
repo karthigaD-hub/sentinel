@@ -61,6 +61,7 @@ class ChatResponse(BaseModel):
     conversation_id: UUID
     answer: str
     citations: list = []
+    status: str = "ok"
 
 class RAGQueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=5000)

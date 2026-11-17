@@ -6,13 +6,20 @@ import { assistantApi } from '../api/assistantApi';
 import { ragApi } from '../api/ragApi';
 import { LoadingState, EmptyState, BackendOfflineState, LLMUnavailable } from '../components/StateComponents';
 import { cn, formatRelativeTime } from '../utils/cn';
-import type { Citation } from '../api/types';
+import type { AssistantStatus, Citation } from '../api/types';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   citations?: Citation[];
+  status?: AssistantStatus;
 }
+
+const STATUS_NOTICES: Partial<Record<AssistantStatus, string>> = {
+  insufficient_evidence: 'The indexed threat intelligence does not contain enough evidence to answer this question.',
+  truncated: 'The answer was cut off because it reached the model length limit.',
+  rag_unavailable: 'No threat-intelligence documents are indexed yet, so no sources were used.',
+};
 
 export function AIAssistantPage() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -30,11 +37,11 @@ export function AIAssistantPage() {
     mutationFn: assistantApi.chat,
     onSuccess: (data) => {
       setConversationId(data.conversation_id);
-      setMessages((prev) => [...prev, { role: 'assistant', content: data.answer, citations: data.citations }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: data.answer, citations: data.citations, status: data.status }]);
     },
     onError: (err: unknown) => {
       const message = (err as { message?: string })?.message || 'Failed to get response';
-      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${message}`, citations: [] }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: `Error: ${message}`, citations: [], status: 'llm_error' }]);
     },
   });
 
@@ -71,9 +78,9 @@ export function AIAssistantPage() {
     sendMessage(userMessage);
   };
 
-  const isLLMUnavailable = messages.some((m) => m.role === 'assistant' && m.content.includes('LLM provider is not configured'));
+  const llmNotConfigured = messages.some((m) => m.status === 'llm_not_configured');
 
-  if (isLLMUnavailable && messages.length > 0 && !ragAvailable) {
+  if (llmNotConfigured && !ragAvailable) {
     return (
       <div className="space-y-6">
         <div>
@@ -128,6 +135,9 @@ export function AIAssistantPage() {
                         <span className="text-xs font-medium text-navy-400">{msg.role === 'user' ? 'You' : 'Q-Sentinel AI'}</span>
                       </div>
                       <p className="text-sm text-navy-100 whitespace-pre-wrap">{msg.content}</p>
+                      {msg.role === 'assistant' && msg.status && STATUS_NOTICES[msg.status] && (
+                        <p className="mt-2 text-xs text-warning-500">{STATUS_NOTICES[msg.status]}</p>
+                      )}
                       {msg.citations && msg.citations.length > 0 && (
                         <div className="mt-3 pt-3 border-t border-navy-700/50">
                           <div className="flex items-center gap-1.5 mb-2">

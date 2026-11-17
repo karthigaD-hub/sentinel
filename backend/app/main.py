@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,13 +9,19 @@ from app.core.logging_config import configure_logging
 from app.database.session import AsyncSessionLocal
 from app.database.health import database_health
 from app.middleware.security import RequestSecurityMiddleware
+from app.rag.service import rag_service
 from app.websocket.manager import manager
+
+logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     configure_logging(settings.log_level)
-    async with AsyncSessionLocal() as session:
-        await rag_service.reload(session)
+    try:
+        async with AsyncSessionLocal() as session:
+            await rag_service.reload(session)
+    except Exception:
+        logger.exception("rag index reload failed at startup; retrieval disabled until ingest succeeds")
     yield
 
 app = FastAPI(title="Q-Sentinel API", version="1.0.0", lifespan=lifespan)
