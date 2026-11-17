@@ -3,6 +3,8 @@ from app.packet_capture.schemas import PacketMetadata
 
 
 def parse_packet(packet, interface: str) -> PacketMetadata | None:
+    if packet is None:
+        return None
     try:
         from scapy.layers.inet import IP, TCP, UDP, ICMP
         from scapy.layers.dns import DNS
